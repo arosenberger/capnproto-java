@@ -1,5 +1,6 @@
 package org.capnproto.examples;
 
+import org.capnproto.MessageBuilder;
 import org.capnproto.MessageReader;
 import org.capnproto.StructList;
 import org.capnproto.InputStreamMessageReader;
@@ -9,7 +10,13 @@ import org.capnproto.examples.Addressbook.*;
 public class AddressbookMain {
 
     public static void writeAddressBook() {
-        System.out.println("writing is yet unimplemented");
+        System.out.println("WARNING: writing is not yet fully implemented");
+        MessageBuilder message = new MessageBuilder();
+        AddressBook.Builder addressbook = message.initRoot(AddressBook.Builder.factory);
+        StructList.Builder<Person.Builder> people = addressbook.initPeople(2);
+
+        Person.Builder alice = people.get(0);
+        //alice.setId(123);
     }
 
     public static void printAddressBook() throws java.io.IOException {
