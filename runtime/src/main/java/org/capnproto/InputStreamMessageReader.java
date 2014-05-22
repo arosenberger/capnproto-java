@@ -6,7 +6,10 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Vector;
 
+import static org.capnproto.Constants.WORD_SIZE;
+
 public final class InputStreamMessageReader {
+    private static final int SEGMENT_LIMIT = 512;
 
     static byte[] readExact(InputStream is, int length) throws IOException {
         byte[] bytes = new byte[length];
@@ -31,20 +34,16 @@ public final class InputStreamMessageReader {
     }
 
     public static MessageReader create(InputStream is) throws IOException {
-        ByteBuffer firstWord = makeByteBuffer(readExact(is, 8));
+        ByteBuffer headerWord = makeByteBuffer(readExact(is, WORD_SIZE));
 
-        int segmentCount = 1 + firstWord.getInt(0);
+        int segmentCount = readTotalSegments(headerWord);
 
-        int segment0Size = 0;
+        int firstSegmentSize = 0;
         if (segmentCount > 0) {
-            segment0Size = firstWord.getInt(4);
+            firstSegmentSize = headerWord.getInt();
         }
 
-        int totalWords = segment0Size;
-
-        if (segmentCount > 512) {
-            throw new IOException("too many segments");
-        }
+        int totalWords = firstSegmentSize;
 
         // in words
         Vector<Integer> moreSizes = new Vector<Integer>();
@@ -60,15 +59,15 @@ public final class InputStreamMessageReader {
 
         // TODO check that totalWords is reasonable
 
-        byte[] allSegments = readExact(is, totalWords * 8);
+        byte[] allSegments = readExact(is, totalWords * WORD_SIZE);
 
         ByteBuffer[] segmentSlices = new ByteBuffer[segmentCount];
 
-        segmentSlices[0] = ByteBuffer.wrap(allSegments, 0, segment0Size * 8);
+        segmentSlices[0] = ByteBuffer.wrap(allSegments, 0, firstSegmentSize * WORD_SIZE);
         segmentSlices[0].order(ByteOrder.LITTLE_ENDIAN);
         segmentSlices[0].mark();
 
-        int offset = segment0Size;
+        int offset = firstSegmentSize;
 
         for (int ii = 1; ii < segmentCount; ++ii) {
             segmentSlices[ii] = ByteBuffer.wrap(allSegments, offset * 8, moreSizes.get(ii - 1) * 8);
@@ -80,4 +79,21 @@ public final class InputStreamMessageReader {
         return new MessageReader(segmentSlices);
     }
 
+    private static int readTotalSegments(ByteBuffer headerWord) {
+        int segmentCount = 1 + headerWord.getInt();
+
+        if (segmentCount > SEGMENT_LIMIT) {
+            throw new RuntimeException(
+                String.format("%s segments is greater than segment limit: %s",
+                    segmentCount,
+                    SEGMENT_LIMIT)
+            );
+        }
+
+        return segmentCount;
+    }
+
+    private static int readFirstSegmentLength(ByteBuffer headerWord) {
+        return headerWord.getInt();
+    }
 }

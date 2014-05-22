@@ -13,5 +13,4 @@ public final class AnyPointer {
             return factory.fromStructReader(this.reader.getStruct());
         }
     }
-
 }
