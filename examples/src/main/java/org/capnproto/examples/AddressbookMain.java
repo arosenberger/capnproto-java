@@ -1,24 +1,29 @@
 package org.capnproto.examples;
 
+import java.io.FileOutputStream;
+import java.io.FileDescriptor;
+
 import org.capnproto.MessageBuilder;
 import org.capnproto.MessageReader;
-import org.capnproto.StructList;
 import org.capnproto.InputStreamMessageReader;
+import org.capnproto.Serialize;
+import org.capnproto.StructList;
 import org.capnproto.Text;
 
 import org.capnproto.examples.Addressbook.*;
 
 public class AddressbookMain {
 
-    public static void writeAddressBook() {
-        System.out.println("WARNING: writing is not yet fully implemented");
+    public static void writeAddressBook() throws java.io.IOException {
         MessageBuilder message = new MessageBuilder();
         AddressBook.Builder addressbook = message.initRoot(AddressBook.Builder.factory);
         StructList.Builder<Person.Builder> people = addressbook.initPeople(2);
 
         Person.Builder alice = people.get(0);
         alice.setId(123);
+
         alice.setName(new Text.Reader("Alice"));
+
         alice.setEmail(new Text.Reader("alice@example.com"));
 
         StructList.Builder<Person.PhoneNumber.Builder> alicePhones = alice.initPhones(1);
@@ -26,7 +31,7 @@ public class AddressbookMain {
         alicePhones.get(0).setType(Person.PhoneNumber.Type.MOBILE);
         alice.getEmployment().setSchool(new Text.Reader("MIT"));
 
-        Person.Builder bob = people.get(0);
+        Person.Builder bob = people.get(1);
         bob.setId(456);
         bob.setName(new Text.Reader("Bob"));
         bob.setEmail(new Text.Reader("bob@example.com"));
@@ -35,7 +40,10 @@ public class AddressbookMain {
         bobPhones.get(0).setType(Person.PhoneNumber.Type.HOME);
         bobPhones.get(1).setNumber(new Text.Reader("555-7654"));
         bobPhones.get(1).setType(Person.PhoneNumber.Type.WORK);
-        bob.getEmployment().setUnemployed();
+        bob.getEmployment().setUnemployed(org.capnproto.Void.VOID);
+
+        Serialize.writeMessage((new FileOutputStream(FileDescriptor.out)).getChannel(),
+                               message);
     }
 
     public static void printAddressBook() throws java.io.IOException {

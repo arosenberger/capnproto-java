@@ -6,9 +6,14 @@ final class WireHelpers {
         return (bytes + 7) / 8;
     }
 
+    public static int roundBitsUpToWords(long bits) {
+        //# This code assumes 64-bit words.
+        return (int)((bits + 63) / ((long) Constants.BITS_PER_WORD));
+    }
+
     public static int allocate(int refOffset,
                                SegmentBuilder segment,
-                               int amount,
+                               int amount, // in words
                                byte kind) {
 
         // TODO check for nullness, amount == 0 case.
@@ -25,11 +30,60 @@ final class WireHelpers {
         }
     }
 
+    public static StructBuilder initStructPointer(int refOffset,
+                                                  SegmentBuilder segment,
+                                                  StructSize size) {
+        int ptrOffset = allocate(refOffset, segment, size.total(), WirePointer.STRUCT);
+        StructPointer.setFromStructSize(segment.buffer, refOffset, size);
+        return new StructBuilder(segment, ptrOffset * 8, ptrOffset + size.data,
+                                 size.data * 64, size.pointers, (byte)0);
+    }
+
+    public static StructBuilder getWritableStructPointer(int refOffset,
+                                                         SegmentBuilder segment,
+                                                         StructSize size) {
+        long ref = WirePointer.get(segment.buffer, refOffset);
+        int target = WirePointer.target(refOffset, ref);
+        if (WirePointer.isNull(ref)) {
+            return initStructPointer(refOffset, segment, size);
+        }
+        long oldRef = ref;
+        SegmentBuilder oldSegment = segment;
+        // TODO follow fars.
+        int oldPtrOffset = target;
+
+        short oldDataSize = StructPointer.dataSize(WirePointer.structPointer(oldRef));
+        short oldPointerCount = StructPointer.ptrCount(WirePointer.structPointer(oldRef));
+        int oldPointerSectionOffset = oldPtrOffset + oldDataSize;
+
+        if (oldDataSize < size.data || oldPointerCount < size.pointers) {
+            throw new Error("unimplemented");
+        } else {
+            return new StructBuilder(oldSegment, oldPtrOffset * 8,
+                                     oldPointerSectionOffset, oldDataSize * 64,
+                                     oldPointerCount, (byte)0);
+        }
+
+    }
+
     public static ListBuilder initListPointer(int refOffset,
                                               SegmentBuilder segment,
                                               int elementCount,
                                               byte elementSize) {
-        throw new Error("unimplemented");
+        if (elementSize == FieldSize.INLINE_COMPOSITE) {
+            throw new DecodeException("Should have called initStructListPointer instead");
+        }
+
+        int dataSize = FieldSize.dataBitsPerElement(elementSize);
+        int pointerCount = FieldSize.pointersPerElement(elementSize);
+        int step = dataSize + pointerCount * Constants.BITS_PER_POINTER;
+        int wordCount = roundBitsUpToWords((long)elementCount * (long)step);
+        int ptr = allocate(refOffset, segment, wordCount, WirePointer.LIST);
+
+        ListPointer.set(segment.buffer, refOffset, elementSize, elementCount);
+
+        return new ListBuilder(segment, ptr * Constants.BYTES_PER_WORD,
+                               elementCount, step, dataSize, (short)pointerCount);
     }
 
     public static ListBuilder initStructListPointer(int refOffset,
@@ -46,7 +100,8 @@ final class WireHelpers {
 
         //# Allocate the list, prefixed by a single WirePointer.
         int wordCount = elementCount * wordsPerElement;
-        int ptrOffset = allocate(refOffset, segment, 1 + wordCount, WirePointer.LIST);
+        int ptrOffset = allocate(refOffset, segment, Constants.POINTER_SIZE_IN_WORDS + wordCount,
+                                 WirePointer.LIST);
 
         //# Initialize the pointer.
         ListPointer.setInlineComposite(segment.buffer, refOffset, wordCount);
@@ -56,7 +111,7 @@ final class WireHelpers {
 
         ptrOffset += 1;
 
-        return new ListBuilder(segment, ptrOffset, elementCount, wordsPerElement * 64,
+        return new ListBuilder(segment, ptrOffset * 8, elementCount, wordsPerElement * 64,
                                elementSize.data * 64, elementSize.pointers);
     }
 
@@ -73,7 +128,7 @@ final class WireHelpers {
         //# Initialize the pointer.
         ListPointer.set(segment.buffer, refOffset, FieldSize.BYTE, byteSize);
 
-        return new Text.Builder(segment.buffer, ptrOffset, size);
+        return new Text.Builder(segment.buffer, ptrOffset * 8, size);
     }
 
     public static Text.Builder setTextPointer(int refOffset,
@@ -86,6 +141,33 @@ final class WireHelpers {
             builder.buffer.put(builder.offset + i, value.buffer.get(value.offset + i));
         }
         return builder;
+    }
+
+    public static Text.Builder getWritableTextPointer(int refOffset,
+                                                      SegmentBuilder segment) {
+        long ref = WirePointer.get(segment.buffer, refOffset);
+
+        if (WirePointer.isNull(ref)) {
+            // TODO default values
+            return new Text.Builder(null, 0, 0);
+        }
+
+        int refTarget = WirePointer.target(refOffset, ref);
+        int ptr = refTarget;
+
+        if (WirePointer.kind(ref) != WirePointer.LIST) {
+            throw new DecodeException("Called getText{Field,Element} but existing pointer is not a list.");
+        }
+        if (ListPointer.elementSize(WirePointer.listPointer(ref)) != FieldSize.BYTE) {
+            throw new DecodeException(
+                "Called getText{Field,Element} but existing list pointer is not byte-sized.");
+        }
+
+
+        //# Subtract 1 from the size for the NUL terminator.
+        return new Text.Builder(segment.buffer, ptr * 8,
+                                ListPointer.elementCount(WirePointer.listPointer(ref)) - 1);
+
     }
 
     public static StructReader readStructPointer(SegmentReader segment,

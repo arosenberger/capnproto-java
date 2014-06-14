@@ -21,13 +21,14 @@ public final class StructReader {
         this.nestingLimit = nestingLimit;
     }
 
-    public final boolean getBoolField(int offset) {
+    public final boolean getBooleanField(int offset) {
         // XXX should use unsigned operations
         if (offset < this.dataSize) {
             if (offset == 0) {
                 offset = this.bit0Offset;
             }
-            byte b = this.segment.buffer.get(offset / 8);
+            byte b = this.segment.buffer.get(this.data + offset / 8);
+
             return (b & (1 << (offset % 8))) != 0;
         } else {
             return false;
@@ -42,9 +43,9 @@ public final class StructReader {
         }
     }
 
-    public final byte getShortField(int offset) {
+    public final short getShortField(int offset) {
         if ((offset + 1) * 16 <= this.dataSize) {
-            return this.segment.buffer.get(this.data + offset * 2);
+            return this.segment.buffer.getShort(this.data + offset * 2);
         } else {
             return 0;
         }
@@ -53,6 +54,30 @@ public final class StructReader {
     public final int getIntField(int offset) {
         if ((offset + 1) * 32 <= this.dataSize) {
             return this.segment.buffer.getInt(this.data + offset * 4);
+        } else {
+            return 0;
+        }
+    }
+
+    public final long getLongField(int offset) {
+        if ((offset + 1) * 64 <= this.dataSize) {
+            return this.segment.buffer.getLong(this.data + offset * 8);
+        } else {
+            return 0;
+        }
+    }
+
+    public final float getFloatField(int offset) {
+        if ((offset + 1) * 32 <= this.dataSize) {
+            return this.segment.buffer.getFloat(this.data + offset * 4);
+        } else {
+            return 0;
+        }
+    }
+
+    public final double getDoubleField(int offset) {
+        if ((offset + 1) * 64 <= this.dataSize) {
+            return this.segment.buffer.getDouble(this.data + offset * 8);
         } else {
             return 0;
         }

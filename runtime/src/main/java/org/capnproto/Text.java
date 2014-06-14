@@ -54,6 +54,21 @@ public final class Text {
             this.offset = offset;
             this.size = size;
         }
+
+        @Override
+        public final String toString() {
+            byte[] bytes = new byte[this.size];
+
+            this.buffer.position(this.offset);
+            this.buffer.get(bytes, 0, this.size);
+
+            try {
+                return new String(bytes, "UTF-8");
+            } catch (java.io.UnsupportedEncodingException e) {
+                return "unsupported encoding"; // XXX
+            }
+        }
+
     }
 
 }

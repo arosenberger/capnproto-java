@@ -2,10 +2,10 @@ package org.capnproto;
 
 public final class StructList {
     public static final class Reader<T> {
-        public ListReader reader;
+        public final ListReader reader;
         public final FromStructReader<T> factory;
 
-        public Reader(ListReader reader, FromStructReader<T> factory) {
+        public Reader(FromStructReader<T> factory, ListReader reader) {
             this.reader = reader;
             this.factory = factory;
         }
@@ -20,16 +20,16 @@ public final class StructList {
     }
 
     public static final class Builder<T> {
-        public ListBuilder builder;
+        public final ListBuilder builder;
         public final FromStructBuilder<T> factory;
 
-        public Builder(ListBuilder builder, FromStructBuilder<T> factory) {
+        public Builder(FromStructBuilder<T> factory, ListBuilder builder) {
             this.builder = builder;
             this.factory = factory;
         }
 
         // init
-        Builder(PointerBuilder builder, int size, FromStructBuilder<T> factory) {
+        Builder(FromStructBuilder<T> factory, PointerBuilder builder, int size) {
             this.builder = builder.initStructList(size, factory.structSize());
             this.factory = factory;
         }
